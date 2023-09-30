@@ -22,8 +22,6 @@ def tastesAndFood(descriptions_list):
     foodPairing = set()
     tastesLike = set()
 
-    print("Food Keywords Loaded from CSV: ", food_keywords_set)
-
     # Iterate through sentences and add matches to the set
     for tastesLikeWord in descriptions_list:
         # Extract food-related phrases from each sentence
@@ -78,97 +76,119 @@ def tastesAndFood(descriptions_list):
     # Remove food from tastesLike
     tastesLike = tastesLike.difference(foodPairing)
 
-    # Print the relevant information (tastesLike)
-    ##print("tastesLike:", tastesLike)
-
-    # Print the extracted food phrases
-    ##print("Extracted Food Phrases:", foodPairing)
+    # Remove single characters from tastesLike
+    tastesLike = dropSingleCharacters(tastesLike)
 
     return tastesLike, foodPairing
+
+def dropSingleCharacters(inputList):
+    outputList = [item for item in inputList if len(item) > 1]
+    return outputList
 
 def readCSV():
     # Read CSV from filepath
     df = pd.read_csv(WINE_DATA_FILE_PATH)
 
-    descriptions_list = df[['description']].stack().dropna()
-    locations_list = set(df[['country', 'province', 'region_1', 'region_2']].stack().dropna())
-    designation_list = set(df[['designation']].stack().dropna())
-    variety_list = set(df[['variety']].stack().dropna())
-    winery_list = set(df[['winery']].stack().dropna())
+    descriptions_list = dropSingleCharacters(df[['description']].stack().dropna())
+    locations_list = dropSingleCharacters(set(df[['country', 'province', 'region_1', 'region_2']].stack().dropna()))
+    designation_list = dropSingleCharacters(set(df[['designation']].stack().dropna()))
+    variety_list = dropSingleCharacters(set(df[['variety']].stack().dropna()))
+    winery_list = dropSingleCharacters(set(df[['winery']].stack().dropna()))
     redOrWhite_list = {'Red', 'White'}
     dryOrSweet_list = {'Dry', 'Sweet'}
     bodied_list = {'light-bodied', 'medium-bodied', 'full-bodied', 'light bodied', 'medium bodied', 'full bodied'}
     crispOrSmooth_list = {'Crisp', 'Smooth'}
     tastesLike_list, foodPairing_list = tastesAndFood(descriptions_list)
-    # Print the resulting list
-    ##print(locations_list)
-    ##print(designation_list)
-    ##print(variety_list)
-    ##print(winery_list)
-    ##print(redOrWhite_list)
-    ##print(dryOrSweet_list)
-    ##print(bodied_list)
-    ##print(crispOrSmooth_list)
-    ##print(tastesLike_list)
-    ##print(foodPairing_list)
-    Labelslist = {
-        'descriptions': descriptions_list,
-        'locations': locations_list,
-        'designation': designation_list,
-        'variety': variety_list,
-        'winery': winery_list,
-        'redOrWhite': redOrWhite_list,
-        'dryOrSweet': dryOrSweet_list,
-        'bodied': bodied_list,
-        'crispOrSmooth': crispOrSmooth_list,
-        'tastesLike': tastesLike_list,
-        'foodPairing': foodPairing_list   
+    
+    # Create dictionary mappings for labels
+    labelsList = {
+        'REGION': locations_list,
+        'DESIGNATION': designation_list,
+        'VARIETY': variety_list,
+        'WINERY': winery_list,
+        'COLOUR': redOrWhite_list,
+        'DRYORSWEET': dryOrSweet_list,
+        'BODIED': bodied_list,
+        'CRISPORSMOOTH': crispOrSmooth_list,
+        'FLAVOUR': tastesLike_list,
+        'FOOD': foodPairing_list   
     }
-    return Labelslist
+    return descriptions_list, labelsList
 
-test = [
-    "This red wine from pairs well with steak."
-]
-test_country = "Napa Valley"
+def remove_overlapping_entities(entities):
+    # Sort entities by start position
+    sorted_entities = sorted(entities, key=lambda x: x[0])
+
+    # Use a list to store non-overlapping entities
+    non_overlapping_entities = []
+
+    # Iterate through the sorted entities
+    for current_entity in sorted_entities:
+        # If non_overlapping_entities is empty or the current_entity does not overlap with the last entity in the list
+        if not non_overlapping_entities or current_entity[0] >= non_overlapping_entities[-1][1]:
+            non_overlapping_entities.append(current_entity)
+        else:
+            # If the current_entity overlaps, choose the one with the larger span
+            if current_entity[1] > non_overlapping_entities[-1][1]:
+                non_overlapping_entities[-1] = current_entity
+
+    return non_overlapping_entities
+
+def label_entities(description, Labelslist):
+    entities = []
+
+    # Loop through each label and its associated list
+    for label, substring_list in Labelslist.items():
+        # Loop through each substring in the list
+        for substring in substring_list:
+            # Find substring positions and add them to the entities list
+            positions = find_substring_positions(description, substring, label)
+            entities.extend(positions)
+        
+    # Remove overlapping entitites
+    entities = remove_overlapping_entities(entities)
+
+    # Convert entities to the required format
+    entities_dict = {"entities": [(start, end, label) for start, end, label in entities]}
+    
+    return description, entities_dict
 
 def find_substring_positions(main_string, substring, label):
     start_positions = [start_pos for start_pos in range(len(main_string)) if main_string.startswith(substring, start_pos)]
     end_positions = [start_pos + len(substring) for start_pos in start_positions]
-    return list(zip(start_positions, end_positions, label))
+    return list(zip(start_positions, end_positions, [label] * len(start_positions)))
 
-def createInputData():
+def createInputData(descriptionsList, labelsList):
+    result = []
     # Loop through the 'descriptions' list
-    for description in labelsList['descriptions']:
-        return description
+    for description in descriptionsList[:50]:
+        result.append(label_entities(description, labelsList))
 
-
-def test():
-    # Example
-    main_string = test[0]
-    substring = test_country
-    positions = find_substring_positions(main_string, substring)
-    print("Positions:", positions)
-
-    # Provide annotated training data
-    input_data = [
-        ("This red wine from Napa Valley pairs well with steak.", {"entities": [(19, 30, "REGION"), (51, 56, "FOOD_PAIRING")]}),
-        ("The Central Coast offers the best wines for steak.", {"entities": [(4, 17, "REGION"), (44, 49, "FOOD_PAIRING")]}),
-        # More annotated examples...
-    ]
-
-    # Split the set into training (70%) and testing (30%) data
-    train_set, test_set = train_test_split(list(input_data), test_size=TRAIN_TEST_SPLIT, random_state=RANDOM_STATE)
-
+    return result
 
 def model():
-    # Load a blank spaCy model
+    descriptionsList, labelsList = readCSV()
+
+    # Split the set into training (70%) and testing (30%) data
+    train_data, test_data = train_test_split(list(createInputData(descriptionsList, labelsList)), test_size=TRAIN_TEST_SPLIT, random_state=RANDOM_STATE)
+
+     # Load a blank spaCy model
     nlp = spacy.blank("en")
 
     # Create the NER component
     ner = nlp.create_pipe("ner")
     # Label entities
     ner.add_label("REGION")
-    ner.add_label("FOOD PAIRING")
+    ner.add_label("DESIGNATION")
+    ner.add_label("VARIETY")
+    ner.add_label("WINERY")
+    ner.add_label("COLOUR")
+    ner.add_label("DRYORSWEET")
+    ner.add_label("BODIED")
+    ner.add_label("CRISPORSMOOTH")
+    ner.add_label("FLAVOUR")
+    ner.add_label("FOOD")
+    
     # Add the NER component to the pipeline
     nlp.add_pipe("ner")
 
@@ -176,19 +196,12 @@ def model():
     optimizer = nlp.begin_training()
     for _ in range(ITERATIONS):  # Adjust the number of iterations
         losses = {}
-        for text, annotations in train_set:
+        for text, annotations in train_data:
             example = Example.from_dict(nlp.make_doc(text), annotations)
             nlp.update([example], drop=DROP, losses=losses)
         print(losses)
 
-    # Test custom model
-    text = "Wines from Napa Valley and Central Coast are excellent and offer the best pairing for steak."
-    doc = nlp(text)
-    for ent in doc.ents:
-        print(f"Entity: {ent.text}, Label: {ent.label_}")
-
+    print("Model Trained")
     nlp.to_disk("wine_ner_model")
 
-labelsList = readCSV()
-
-createInputData()
+model()
