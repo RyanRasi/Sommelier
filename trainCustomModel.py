@@ -3,6 +3,8 @@ import numpy as np
 import spacy
 from sklearn.model_selection import train_test_split
 from spacy.training.example import Example
+from tqdm import tqdm
+import time
 
 ITERATIONS = 100
 DROP = 0.5
@@ -10,6 +12,7 @@ TRAIN_TEST_SPLIT = 0.3
 RANDOM_STATE = 42
 WINE_DATA_FILE_PATH = './data/winemag-data-130k-v2 copy.csv'
 FOOD_DATA_FILE_PATH = './data/food_keywords.csv'
+DATA_SELECTION = 1000
 
 def tastesAndFood(descriptions_list):
     # Load spaCy's English language model
@@ -82,7 +85,8 @@ def tastesAndFood(descriptions_list):
     return tastesLike, foodPairing
 
 def dropSingleCharacters(inputList):
-    outputList = [item for item in inputList if len(item) > 1]
+    removeSingleCharList = [item for item in inputList if len(item) > 1]
+    outputList = {element.lower() for element in removeSingleCharList}
     return outputList
 
 def readCSV():
@@ -94,10 +98,10 @@ def readCSV():
     designation_list = dropSingleCharacters(set(df[['designation']].stack().dropna()))
     variety_list = dropSingleCharacters(set(df[['variety']].stack().dropna()))
     winery_list = dropSingleCharacters(set(df[['winery']].stack().dropna()))
-    redOrWhite_list = {'Red', 'White'}
-    dryOrSweet_list = {'Dry', 'Sweet'}
+    redOrWhite_list = {'red', 'white'}
+    dryOrSweet_list = {'dry', 'sweet'}
     bodied_list = {'light-bodied', 'medium-bodied', 'full-bodied', 'light bodied', 'medium bodied', 'full bodied'}
-    crispOrSmooth_list = {'Crisp', 'Smooth'}
+    crispOrSmooth_list = {'crisp', 'smooth'}
     tastesLike_list, foodPairing_list = tastesAndFood(descriptions_list)
     
     # Create dictionary mappings for labels
@@ -150,7 +154,7 @@ def label_entities(description, Labelslist):
 
     # Convert entities to the required format
     entities_dict = {"entities": [(start, end, label) for start, end, label in entities]}
-    
+    #print(entities_dict)
     return description, entities_dict
 
 def find_substring_positions(main_string, substring, label):
@@ -161,12 +165,14 @@ def find_substring_positions(main_string, substring, label):
 def createInputData(descriptionsList, labelsList):
     result = []
     # Loop through the 'descriptions' list
-    for description in descriptionsList[:50]:
+    for description in descriptionsList[:DATA_SELECTION]:
         result.append(label_entities(description, labelsList))
 
     return result
 
 def model():
+    start_time = time.time()
+
     descriptionsList, labelsList = readCSV()
 
     # Split the set into training (70%) and testing (30%) data
@@ -196,12 +202,18 @@ def model():
     optimizer = nlp.begin_training()
     for _ in range(ITERATIONS):  # Adjust the number of iterations
         losses = {}
-        for text, annotations in train_data:
-            example = Example.from_dict(nlp.make_doc(text), annotations)
-            nlp.update([example], drop=DROP, losses=losses)
+        with tqdm(total=len(train_data), desc="Training") as pbar:
+            for text, annotations in train_data:
+                example = Example.from_dict(nlp.make_doc(text), annotations)
+                nlp.update([example], drop=DROP, losses=losses)
+                pbar.update(1)  # Update the progress bar
         print(losses)
 
     print("Model Trained")
     nlp.to_disk("wine_ner_model")
+
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f"Total Execution Time: {total_time} seconds")
 
 model()
