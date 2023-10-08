@@ -1,0 +1,43 @@
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8f8f8;  /* Light gray background */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+.container {
+    text-align: center;
+}
+
+.search-bar {
+    width: 60%;
+    padding: 15px;
+    font-size: 18px;
+    border: 2px solid #ccc;  /* Light gray border */
+    border-radius: 5px;
+    outline: none;
+}
+
+.placeholder {
+    color: #999;  /* Light gray placeholder color */
+}
+
+/* Styling for the search button (customize as needed) */
+.search-button {
+    padding: 15px;
+    font-size: 18px;
+    background-color: #4CAF50;  /* Green background */
+    color: #fff;  /* White text color */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Hover effect for the search button */
+.search-button:hover {
+    background-color: #45a049;  /* Darker green on hover */
+}

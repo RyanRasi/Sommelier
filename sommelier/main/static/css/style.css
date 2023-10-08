@@ -1,0 +1,74 @@
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8f8f8;  /* Light gray background */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;  /* Align items in a column */
+    height: 100vh;
+    text-align: center;
+}
+
+.container {
+    text-align: center;
+    margin-top: 20px;  /* Adjust the margin from the title */
+}
+
+.search-bar {
+    width: 60%;
+    padding: 15px;
+    font-size: 18px;
+    border: 2px solid #ccc;  /* Light gray border */
+    border-radius: 5px;
+    outline: none;
+}
+
+.placeholder {
+    color: #999;  /* Light gray placeholder color */
+}
+
+.results {
+    margin: 5%;
+}
+/* Styling for the search button (customize as needed) */
+.search-button, .random-wine-button, .return-to-search-button {
+    margin-top: 10px;  /* Adjust the margin between buttons */
+    padding: 15px;
+    font-size: 18px;
+    background-color: #c9685f;  /* Green background */
+    color: #fff;  /* White text color */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Hover effect for the search and random wine buttons */
+.search-button:hover, .random-wine-button:hover, .return-to-search-button:hover {
+    background-color: #c4827c;  /* Darker green on hover */
+}
+
+/* Additional styling for the app title */
+.app-title {
+    margin-bottom: 20px;  /* Adjust the margin below the title */
+    font-size: 36px;
+    font-weight: bold;
+    color: #333;  /* Dark text color */
+}
+
+.return-to-search-button {
+    display: none;
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.left-column,
+.right-column {
+    width: 48%; /* Adjust the width as needed */
+}

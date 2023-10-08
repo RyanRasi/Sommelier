@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
+    <title>Sommelier</title>
+</head>
+
+<body>
+    <h1 class="app-title">Sommelier</h1>
+    <div class="container">
+        <div class="search-buttons">
+            <input type="text" class="search-bar" placeholder="Recommend me a wine...">
+            <button class="search-button" onclick="searchWine()">Search</button>
+            <button class="random-wine-button" onclick="getRandomWine()">Random Wine</button>
+        </div>
+    </div>
+
+    <!-- Display results div -->
+    <div id="results" class="results"></div>
+
+    <!-- Return to Search button -->
+    <button id="return-to-search-button" class="return-to-search-button" onclick="returnToSearch()">Return to
+        Search</button>
+
+    <script>
+        const API_URL = `http://localhost:8001`;
+
+        // Function to handle search button click
+        function searchWine() {
+            const searchTerm = document.querySelector('.search-bar').value;
+            makeApiRequest(searchTerm);
+        }
+
+        // Function to handle random wine button click
+        function getRandomWine() {
+            makeApiRequest('random');
+        }
+
+        // Function to handle return to search button click
+        function returnToSearch() {
+            // Show the search buttons
+            document.querySelector('.search-buttons').style.display = 'block';
+            // Show the title
+            document.querySelector('.app-title').style.display = 'block';
+            // Hide the results
+            document.getElementById('results').style.display = 'none';
+            // Hide the return button
+            document.getElementById('return-to-search-button').style.display = 'none';
+        }
+
+        // Function to make API request
+        function makeApiRequest(query) {
+            if (query == "random") {
+                fetch(`http://localhost:8001/random`)
+                .then(response => response.json())
+                .then(data => {
+                    displayResults(JSON.parse(data));
+                })
+                .catch(error => console.error('Error:', error));
+            } else {
+            fetch(`http://localhost:8001/recommend/?query_param=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    displayResults(JSON.parse(data));
+                })
+                .catch(error => console.error('Error:', error));
+            }
+            // Hide the search buttons
+            document.querySelector('.search-buttons').style.display = 'none';
+            // Hide the title
+            document.querySelector('.app-title').style.display = 'none';
+            // Show the return button
+            document.getElementById('return-to-search-button').style.display = 'block';
+        }
+
+        // Function to display results
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';  // Clear previous results
+
+            if (Array.isArray(data)) {
+                // Proceed with forEach
+                data.forEach(wine => {
+                    // Your existing logic here
+                });
+            } else {
+                console.error("Data is not an array:", data);
+            }
+
+            // Populate results in the div
+            data.forEach(wine => {
+                const resultItem = document.createElement('div');
+
+                // Title & designation
+                const title = document.createElement('div');
+                title.classList.add('big-title');
+                if (wine.title && wine.designation) {
+                    title.innerHTML = `${wine.title} - ${wine.designation}`;
+                } else {
+                    title.innerHTML = wine.title;
+                }
+                resultItem.appendChild(title);
+
+                // Country, Province, Region_1, Region_2
+                const location = document.createElement('div');
+                location.style.color = 'grey';
+                location.textContent = `${wine.country || ''}`
+                if (wine.province) {
+                    location.textContent = `${location.textContent} / ${wine.province}`
+                }
+                if (wine.region_1) {
+                    location.textContent = `${location.textContent} / ${wine.region_1}`
+                }
+                if (wine.region_2) {
+                    location.textContent = `${location.textContent} / ${wine.region_2}`
+                }
+                resultItem.appendChild(location);
+
+                // Description: Italic quotes for the description
+                const description = document.createElement('div');
+                description.innerHTML = `<i>"${wine.description}"</i>`;
+                resultItem.appendChild(description);
+
+                // Check for null values and display taster name and Twitter handle
+                if (wine.taster_name && wine.taster_twitter_handle) {
+                    const tasterInfo = document.createElement('div');
+                    tasterInfo.innerHTML = `<p>Taster: ${wine.taster_name} - <a href=https://twitter.com/${wine.taster_twitter_handle}>${wine.taster_twitter_handle}</a>`;
+                    resultItem.appendChild(tasterInfo);
+                }
+
+                // Create a div for the result
+                const resultContainer = document.createElement('div');
+                resultContainer.classList.add('result-container');
+
+                // Create a div for the wine result
+                const resultItemStack = document.createElement('div');
+                resultItemStack.classList.add('result-item');
+
+                // Variety and Winery (Left)
+                const leftColumn = document.createElement('div');
+                leftColumn.classList.add('left-column');
+
+                const variety = document.createElement('div');
+                variety.textContent = `Variety: ${wine.variety || ''}`;
+                leftColumn.appendChild(variety);
+
+                const winery = document.createElement('div');
+                winery.textContent = `Winery: ${wine.winery || ''}`;
+                leftColumn.appendChild(winery);
+
+                resultItemStack.appendChild(leftColumn);
+
+                // Points and Price (Right)
+                const rightColumn = document.createElement('div');
+                rightColumn.classList.add('right-column');
+
+                const points = document.createElement('div');
+                points.textContent = `Points: ${wine.points || ''} / 100`;
+                rightColumn.appendChild(points);
+
+                const price = document.createElement('div');
+                price.textContent = `Price: $${wine.price || ''} Approx.`;
+                rightColumn.appendChild(price);
+
+                resultItemStack.appendChild(rightColumn);
+
+                // Append the result item to the result container
+                resultContainer.appendChild(resultItem);
+                resultContainer.appendChild(resultItemStack);
+
+                // Append the result container to the results div
+                resultsDiv.appendChild(resultContainer);
+
+                // Show the results
+                document.getElementById('results').style.display = 'block';
+            });
+        }
+    </script>
+</body>
+
+</html>
