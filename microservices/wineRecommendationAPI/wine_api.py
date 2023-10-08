@@ -34,5 +34,4 @@ def read_item(query_param: str = None):
 
 @app.get("/random")
 def read_root():
-    randomWine.model()
-    return trainCustomModel.model()
+    return randomWine.random()
