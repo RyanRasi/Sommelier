@@ -3,7 +3,7 @@ A wine recommendation model using natural language processing (NLP)
 
 Inspired by the film "Sideways (2004)" I decided to develop a model designed to recommend a wine to a user based on descriptions akin to those provided by a sommelier following a tasting experience. The user can also specify any varieties, wineries, and region preferences that they would like their recommended wine to have as well as any tastes and food pairings. Due to this using Named Entity Recognition (NER), the user can ask questions that they normally would at a restuarant to discover their chosen wine.
 
-Questions you can ask:
+### Questions you can ask:
 
 Wine from a specific country
 `Give me a wine from Italy`
@@ -34,7 +34,7 @@ A custom Named Entity Recognition (NER) Model has been trained and customised to
 1. Go to the [Kaggle Wine Reviews Dataset](https://www.kaggle.com/datasets/zynicide/wine-reviews), make an account and download the dataset
 2. Once you have downloaded the file titled 'winemag-data-130k-v2.csv', place it within the microservices/wineRecommendationAPI/data folder
 
-### Locally
+#### Local Hosting
 
 1. Clone the repo to a folder directory of your choosing
 2. Place the file downloaded from the pre-requisite step into the microservices/wineRecommendationAPI/data directory if you haven't already
@@ -45,7 +45,7 @@ A custom Named Entity Recognition (NER) Model has been trained and customised to
 7. In terminal A, run `python manage.py collectstatic`, `python manage.py makemigrations`, `python manage.py migrate`, `python manage.py runserver`, and accept the 'yes' prompts
 8. In terminal B, run `uvicorn wine_api:app --host 0.0.0.0 --port 8001`
 
-## Docker Container
+#### Docker Container
 
 1. Clone the repo to a folder directory of your choosing
 2. Place the file downloaded from the pre-requisite step into the microservices/wineRecommendationAPI/data directory if you haven't already
