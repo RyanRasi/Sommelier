@@ -12,7 +12,7 @@ ITERATIONS = 100
 DROP = 0.5
 TRAIN_TEST_SPLIT = 0.3
 RANDOM_STATE = 42
-WINE_DATA_FILE_PATH = './data/winemag-data-130k-v2 copy.csv'
+WINE_DATA_FILE_PATH = './data/winemag-data-130k-v2.csv'
 FOOD_DATA_FILE_PATH = './assets/food_keywords.csv'
 DESC_DATA_FILE_PATH = './assets/description_keywords.csv'
 DATA_SELECTION = 1430
@@ -27,7 +27,7 @@ def dataSanitisation(inputList):
 def readCSV():
     # Read CSV from filepath
     df = pd.read_csv(WINE_DATA_FILE_PATH)
-    descriptions_list = dataSanitisation(set(df[['description']].stack().dropna()))
+    descriptions_list = dataSanitisation(set(df[['description']].stack().dropna().head(DATA_SELECTION)))
     redOrWhite_list = {'red', 'white'}
     dryOrSweet_list = {'dry', 'sweet'}
     bodied_list = {'light-bodied', 'medium-bodied', 'full-bodied', 'light bodied', 'medium bodied', 'full bodied'}
@@ -88,7 +88,7 @@ def find_substring_positions(main_string, substring, label):
 def createInputData(descriptionsList, labelsList):
     result = []
     # Loop through the 'descriptions' list
-    for description in islice(descriptionsList, DATA_SELECTION):
+    for description in descriptionsList:
         result.append(label_entities(description, labelsList))
 
     return result
@@ -101,16 +101,12 @@ def model():
     # Split the set into training (70%) and testing (30%) data
     train_data, test_data = train_test_split(list(createInputData(descriptionsList, labelsList)), test_size=TRAIN_TEST_SPLIT, random_state=RANDOM_STATE)
 
-     # Load a blank spaCy model
+    # Load a blank spaCy model
     nlp = spacy.blank("en")
 
     # Create the NER component
     ner = nlp.create_pipe("ner")
     # Label entities
-    ner.add_label("REGION")
-    ner.add_label("DESIGNATION")
-    ner.add_label("VARIETY")
-    ner.add_label("WINERY")
     ner.add_label("COLOUR")
     ner.add_label("DRYORSWEET")
     ner.add_label("BODIED")
@@ -138,3 +134,27 @@ def model():
     end_time = time.time()
     total_time = end_time - start_time
     print(f"Total Execution Time: {total_time} seconds")
+
+    # Evaluate the model on the test set
+    total_entities = 0
+    correct_entities = 0
+    false_negatives = 0
+
+    for text, annotations in test_data:
+        doc = nlp(text)
+        gold_entities = set((start, end, label) for start, end, label in annotations.get('entities', []))
+        predicted_entities = set((ent.start_char, ent.end_char, ent.label_) for ent in doc.ents)
+
+        total_entities += len(gold_entities)
+        correct_entities += len(gold_entities.intersection(predicted_entities))
+        false_negatives += len(gold_entities - predicted_entities)
+
+    precision = correct_entities / total_entities if total_entities > 0 else 0.0
+    recall = correct_entities / (correct_entities + false_negatives) if (correct_entities + false_negatives) > 0 else 0.0
+    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    print(f"Precision: {precision:.2%}")
+    print(f"Recall: {recall:.2%}")
+    print(f"F1 Score: {f1_score:.2%}")
+
+model()
