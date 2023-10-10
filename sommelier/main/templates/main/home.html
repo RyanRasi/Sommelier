@@ -19,6 +19,9 @@
         </div>
     </div>
 
+    <div id="loading" class="loading" style="display: none;">
+        Loading Recommendations...
+    </div>
     <!-- Display results div -->
     <div id="results" class="results"></div>
 
@@ -54,20 +57,21 @@
 
         // Function to make API request
         function makeApiRequest(query) {
+            document.querySelector('.loading').style.display = 'block'
             if (query == "random") {
                 fetch(`http://localhost:8001/random`)
-                .then(response => response.json())
-                .then(data => {
-                    displayResults(JSON.parse(data));
-                })
-                .catch(error => console.error('Error:', error));
+                    .then(response => response.json())
+                    .then(data => {
+                        displayResults(JSON.parse(data));
+                    })
+                    .catch(error => console.error('Error:', error));
             } else {
-            fetch(`http://localhost:8001/recommend/?query_param=${query}`)
-                .then(response => response.json())
-                .then(data => {
-                    displayResults(JSON.parse(data));
-                })
-                .catch(error => console.error('Error:', error));
+                fetch(`http://localhost:8001/recommend/?query_param=${query}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        displayResults(JSON.parse(data));
+                    })
+                    .catch(error => console.error('Error:', error));
             }
             // Hide the search buttons
             document.querySelector('.search-buttons').style.display = 'none';
@@ -79,6 +83,7 @@
 
         // Function to display results
         function displayResults(data) {
+            document.querySelector('.loading').style.display = 'none'
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '';  // Clear previous results
 
@@ -144,13 +149,17 @@
                 const leftColumn = document.createElement('div');
                 leftColumn.classList.add('left-column');
 
-                const variety = document.createElement('div');
-                variety.textContent = `Variety: ${wine.variety || ''}`;
-                leftColumn.appendChild(variety);
+                if (wine.variety) {
+                    const variety = document.createElement('div');
+                    variety.textContent = `Variety: ${wine.variety || ''}`;
+                    leftColumn.appendChild(variety);
+                }
 
-                const winery = document.createElement('div');
-                winery.textContent = `Winery: ${wine.winery || ''}`;
-                leftColumn.appendChild(winery);
+                if (wine.winery) {
+                    const winery = document.createElement('div');
+                    winery.textContent = `Winery: ${wine.winery || ''}`;
+                    leftColumn.appendChild(winery);
+                }
 
                 resultItemStack.appendChild(leftColumn);
 
@@ -158,14 +167,17 @@
                 const rightColumn = document.createElement('div');
                 rightColumn.classList.add('right-column');
 
-                const points = document.createElement('div');
-                points.textContent = `Points: ${wine.points || ''} / 100`;
-                rightColumn.appendChild(points);
+                if (wine.points) {
+                    const points = document.createElement('div');
+                    points.textContent = `Points: ${wine.points || ''} / 100`;
+                    rightColumn.appendChild(points);
+                }
 
-                const price = document.createElement('div');
-                price.textContent = `Price: $${wine.price || ''} Approx.`;
-                rightColumn.appendChild(price);
-
+                if (wine.price) {
+                    const price = document.createElement('div');
+                    price.textContent = `Price: $${wine.price} Approx.`;
+                    rightColumn.appendChild(price);
+                }
                 resultItemStack.appendChild(rightColumn);
 
                 // Append the result item to the result container
