@@ -110,7 +110,6 @@ def recommend(user_query):
     print(set_winery)
 
     print(user_query)
-    #user_query = user_query.replace(" ", "")
 
     user_query = extract_entities(user_query)
     print(user_query)
