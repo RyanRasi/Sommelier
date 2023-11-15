@@ -1,5 +1,5 @@
 # Sommelier
-A wine recommendation model using natural language processing (NLP)
+A wine recommendation model using natural language processing (NLP) with a custom named entity recognition (NER) model.
 
 Inspired by the film "Sideways (2004)" I decided to develop a model designed to recommend a wine to a user based on descriptions akin to those provided by a sommelier following a tasting experience. The user can also specify any varieties, wineries, and region preferences that they would like their recommended wine to have as well as any tastes and food pairings. Due to this using Named Entity Recognition (NER), the user can ask questions that they normally would at a restuarant to discover their chosen wine.
 
@@ -24,8 +24,6 @@ Wine that has a region and food pairing
 `Give me a wine from Italy that pairs with seafood`
 
 Questions can also be asked regarding wines that are red or white, dry or sweet, light or full bodied, or crisp or smooth 
-
-A custom Named Entity Recognition (NER) Model has been trained and customised to identify specific entities (in this case being wine regions, designations, varieties, wineries, general desriptions and food pairings). Whilst the default SpaCy model of en_core_web_lg is great, it struggles with defining multiple word locations such as Napa Valley, as well as complex wine varieties. Due to wine descriptions utilising a wide range of vocabulary, I decided it was important to refine the model further and so a custom model was created. The training takes place on 2000 entities which are individually labelled and takes around an hour to fully train. This is then tested on a dataset of around 100,000 entities.
 
 ## How to install:
 
@@ -64,6 +62,8 @@ A custom Named Entity Recognition (NER) Model has been trained and customised to
 1. I have personally trained the model already on 2000 training entries, however if you wish to train on more entries then you can either run the python file 'trainCustomModel.py' locally or you can access 'http://localhost:8001/train' within the browser upin running the webserver. Don't forget to place the Kaggle dataset file within the `microservices/wineRecommendationAPI/data` first
 
 ## Methodology
+
+A custom Named Entity Recognition (NER) Model has been trained and customised to identify specific entities (in this case being wine regions, designations, varieties, wineries, general desriptions and food pairings). Whilst the default SpaCy model of en_core_web_lg is great, it struggles with defining multiple word locations such as Napa Valley, as well as complex wine varieties. Due to wine descriptions utilising a wide range of vocabulary, I decided it was important to refine the model further and so a custom model was created. The training takes place on 2000 entities which are individually labelled and takes around an hour to fully train. This is then tested on a dataset of around 100,000 entities.
 
 To train a custom NER model using SpaCy, the following steps were taken:
 
