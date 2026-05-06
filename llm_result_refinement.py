@@ -231,5 +231,6 @@ def validation():
 
     print("✅ All refinement checks passed.")
 
-test()
-validation()
+if __name__ == "__main__":
+    test()
+    validation()

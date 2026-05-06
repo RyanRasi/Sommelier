@@ -196,5 +196,6 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     print(f"  Filters applied: {len(df)} → {len(filtered)} wines")
     return filtered.reset_index(drop=True)
 
-test()
-validation()
+if __name__ == "__main__":
+    test()
+    validation()
