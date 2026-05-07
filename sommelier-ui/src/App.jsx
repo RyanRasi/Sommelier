@@ -30,17 +30,21 @@ function SkeletonCard() {
 }
 
 // ─────────────────────────────────────────────
-// Desktop card — description is scrollable
+// Desktop card — description scrolls
 // ─────────────────────────────────────────────
 function DesktopCard({ rec, index }) {
   const whyRef = useRef(null);
   const [overflowing, setOverflowing] = useState(false);
 
   useEffect(() => {
-    if (whyRef.current) {
-      setOverflowing(whyRef.current.scrollHeight > whyRef.current.clientHeight + 4);
-    }
+    const el = whyRef.current;
+    if (el) setOverflowing(el.scrollHeight > el.clientHeight + 4);
   }, [rec]);
+
+  // Hide fade once user scrolls down
+  const handleScroll = (e) => {
+    if (e.target.scrollTop > 4) setOverflowing(false);
+  };
 
   return (
     <div className="wine-card">
@@ -50,7 +54,7 @@ function DesktopCard({ rec, index }) {
       </div>
       <div className="divider" />
       <div className="why-wrap">
-        <p className="why" ref={whyRef}>{rec.why}</p>
+        <p className="why" ref={whyRef} onScroll={handleScroll}>{rec.why}</p>
         {overflowing && <div className="why-fade" />}
       </div>
       <div className="detail-row">
@@ -68,16 +72,17 @@ function DesktopCard({ rec, index }) {
 }
 
 // ─────────────────────────────────────────────
-// Mobile swipeable card stack
+// Swipeable card stack — touch + mouse drag
 // ─────────────────────────────────────────────
-function MobileStack({ results }) {
+function SwipeStack({ results }) {
   const [active, setActive] = useState(0);
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
+  const mouseDown = useRef(false);
   const containerRef = useRef(null);
 
-  // Touch handlers
+  // ── Touch ──
   const onTouchStart = useCallback((e) => {
     startX.current = e.touches[0].clientX;
     setDragging(true);
@@ -88,11 +93,46 @@ function MobileStack({ results }) {
   }, []);
 
   const onTouchEnd = useCallback(() => {
+    commitDrag();
+  }, [dragX, active, results.length]);
+
+  // ── Mouse ──
+  const onMouseDown = useCallback((e) => {
+    mouseDown.current = true;
+    startX.current = e.clientX;
+    setDragging(true);
+    e.preventDefault(); // prevent text selection while dragging
+  }, []);
+
+  const onMouseMove = useCallback((e) => {
+    if (!mouseDown.current) return;
+    setDragX(e.clientX - startX.current);
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    if (!mouseDown.current) return;
+    mouseDown.current = false;
+    commitDrag();
+  }, [dragX, active, results.length]);
+
+  const onMouseLeave = useCallback(() => {
+    if (!mouseDown.current) return;
+    mouseDown.current = false;
+    commitDrag();
+  }, [dragX, active, results.length]);
+
+  // ── Shared snap logic ──
+  const commitDrag = useCallback(() => {
     if (dragX < -50 && active < results.length - 1) setActive((a) => a + 1);
     else if (dragX > 50 && active > 0) setActive((a) => a - 1);
     setDragX(0);
     setDragging(false);
   }, [dragX, active, results.length]);
+
+  // Re-bind commitDrag to touch/mouse handlers that captured it in closure
+  // by using a ref so they always call the latest version
+  const commitRef = useRef(commitDrag);
+  useEffect(() => { commitRef.current = commitDrag; }, [commitDrag]);
 
   const getCardStyle = (index) => {
     const cw = containerRef.current?.offsetWidth || 320;
@@ -110,6 +150,7 @@ function MobileStack({ results }) {
       transform: `translateX(calc(-50% + ${tx}%)) rotate(${rot}deg) scale(${scale})`,
       zIndex: 20 - Math.round(Math.abs(offset) * 2),
       opacity,
+      cursor: dragging ? "grabbing" : "grab",
       transition: dragging
         ? "none"
         : "transform 0.32s cubic-bezier(.25,.46,.45,.94), opacity 0.32s ease",
@@ -117,14 +158,18 @@ function MobileStack({ results }) {
   };
 
   return (
-    <div className="mobile-stack">
-      <p className="stack-hint">← swipe to explore →</p>
+    <div className="swipe-stack">
+      <p className="stack-hint">← drag or swipe to explore →</p>
       <div
         ref={containerRef}
         className="stack-wrap"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseLeave}
       >
         {results.map((rec, i) => (
           <div key={i} className="swipe-card" style={getCardStyle(i)}>
@@ -133,9 +178,7 @@ function MobileStack({ results }) {
               <h2 className="card-title">{rec.title}</h2>
             </div>
             <div className="divider" />
-            <div className="why-wrap">
-              <p className="why">{rec.why}</p>
-            </div>
+            <p className="why swipe-why">{rec.why}</p>
             <div className="detail-row">
               <div className="detail">
                 <div className="detail-label">Food Pairing</div>
@@ -151,7 +194,11 @@ function MobileStack({ results }) {
       </div>
       <div className="dots">
         {results.map((_, i) => (
-          <div key={i} className={`dot${i === active ? " dot-on" : ""}`} />
+          <div
+            key={i}
+            className={`dot${i === active ? " dot-on" : ""}`}
+            onClick={() => setActive(i)}
+          />
         ))}
       </div>
     </div>
@@ -202,6 +249,38 @@ export default function App() {
     }
   };
 
+  const ResultsContent = ({ mobile }) => (
+    <>
+      {status === "loading" && (
+        <>
+          <p className="results-label">Consulting the cellar&hellip;</p>
+          {!mobile && [0, 1, 2].map((i) => <SkeletonCard key={i} />)}
+        </>
+      )}
+      {status === "error" && (
+        <div className="error-box">
+          <p className="error-title">Something went wrong</p>
+          <p className="error-detail">{errorMsg}</p>
+        </div>
+      )}
+      {status === "done" && results.length > 0 && (
+        <>
+          <p className="results-label">3 selections for &ldquo;{query}&rdquo;</p>
+          {mobile
+            ? <SwipeStack results={results} />
+            : results.map((rec, i) => <DesktopCard key={i} rec={rec} index={i} />)
+          }
+        </>
+      )}
+      {status === "idle" && (
+        <div className="empty">
+          <div className="empty-icon">🍷</div>
+          <p className="empty-text">Your recommendations will appear here</p>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <>
       <style>{CSS}</style>
@@ -211,7 +290,7 @@ export default function App() {
           <p className="eyebrow">AI-Powered Wine Discovery</p>
           <h1 className="title"><em>Sommelier</em></h1>
           <p className="subtitle">
-            What&apos;s on your table tonight?
+            Every great meal deserves the right bottle — what&apos;s on your table tonight?
           </p>
           <div className="hero-rule" />
         </header>
@@ -247,57 +326,12 @@ export default function App() {
           </div>
         </div>
 
-        {/* Desktop results */}
         <div className="results desktop-results">
-          {status === "loading" && (
-            <>
-              <p className="results-label">Consulting the cellar&hellip;</p>
-              {[0, 1, 2].map((i) => <SkeletonCard key={i} />)}
-            </>
-          )}
-          {status === "error" && (
-            <div className="error-box">
-              <p className="error-title">Something went wrong</p>
-              <p className="error-detail">{errorMsg}</p>
-            </div>
-          )}
-          {status === "done" && results.length > 0 && (
-            <>
-              <p className="results-label">3 selections for &ldquo;{query}&rdquo;</p>
-              {results.map((rec, i) => <DesktopCard key={i} rec={rec} index={i} />)}
-            </>
-          )}
-          {status === "idle" && (
-            <div className="empty">
-              <div className="empty-icon">🍷</div>
-              <p className="empty-text">Your recommendations will appear here</p>
-            </div>
-          )}
+          <ResultsContent mobile={false} />
         </div>
 
-        {/* Mobile results */}
         <div className="results mobile-results">
-          {status === "loading" && (
-            <p className="results-label">Consulting the cellar&hellip;</p>
-          )}
-          {status === "error" && (
-            <div className="error-box">
-              <p className="error-title">Something went wrong</p>
-              <p className="error-detail">{errorMsg}</p>
-            </div>
-          )}
-          {status === "done" && results.length > 0 && (
-            <>
-              <p className="results-label">3 selections for &ldquo;{query}&rdquo;</p>
-              <MobileStack results={results} />
-            </>
-          )}
-          {status === "idle" && (
-            <div className="empty">
-              <div className="empty-icon">🍷</div>
-              <p className="empty-text">Your recommendations will appear here</p>
-            </div>
-          )}
+          <ResultsContent mobile={true} />
         </div>
 
       </div>
@@ -342,7 +376,9 @@ const CSS = `
     color: #8a6a60; letter-spacing: 0.2px;
   }
 
-  .hero-rule { width: 60px; height: 1px; background: #c4a090; margin: 28px auto 0; }
+  .hero-rule {
+    width: 60px; height: 1px; background: #c4a090; margin: 28px auto 0;
+  }
 
   /* ── Search ── */
   .search-wrap { max-width: 640px; margin: 0 auto; padding: 0 24px; }
@@ -395,7 +431,7 @@ const CSS = `
   }
   .chip:hover { border-color: #8a1f35; color: #8a1f35; background: #fdf5f0; }
 
-  /* ── Results ── */
+  /* ── Results layout ── */
   .results { max-width: 700px; margin: 52px auto 0; padding: 0 24px; }
 
   .results-label {
@@ -404,18 +440,18 @@ const CSS = `
     color: #c4a090; margin-bottom: 28px; text-align: center;
   }
 
-  /* Desktop = shown by default, hidden on mobile */
+  /* Desktop shown by default, mobile hidden */
   .desktop-results { display: block; }
-  .mobile-results  { display: none; }
+  .mobile-results  { display: none;  }
 
   @media (max-width: 600px) {
-    .desktop-results { display: none; }
+    .desktop-results { display: none;  }
     .mobile-results  { display: block; }
-    .title { font-size: 44px; }
-    .btn { padding: 0 16px; font-size: 11px; }
+    .title { font-size: 40px; }
+    .btn   { padding: 0 16px; font-size: 11px; }
   }
 
-  /* ── Desktop card ── */
+  /* ── Desktop wine card ── */
   .wine-card {
     background: #fff; border: 1px solid #ecddd5; border-radius: 3px;
     padding: 28px 32px; margin-bottom: 14px; position: relative;
@@ -439,7 +475,9 @@ const CSS = `
   .wine-card:hover { border-color: #dcc8bc; }
 
   /* ── Shared card internals ── */
-  .card-top { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .card-top {
+    display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px;
+  }
 
   .rank {
     font-family: 'Cormorant Garamond', serif; font-size: 11px;
@@ -454,31 +492,47 @@ const CSS = `
 
   .divider { height: 1px; background: #f0e4dc; margin: 0 0 12px; }
 
-  /* Scrollable description */
+  /* ── Scrollable description (desktop) ── */
   .why-wrap { position: relative; margin-bottom: 14px; }
 
   .why {
-    font-size: 13px; font-weight: 300; color: #5a3a30; line-height: 1.8;
-    max-height: 82px; overflow-y: auto; padding-right: 4px;
+    font-size: 13px; font-weight: 300; color: #5a3a30;
+    line-height: 1.8; max-height: 88px;
+    overflow-y: scroll;      /* always show scrollbar so user knows it scrolls */
+    padding-right: 10px;     /* room for scrollbar */
+    scroll-behavior: smooth;
   }
-  .why::-webkit-scrollbar { width: 3px; }
-  .why::-webkit-scrollbar-track { background: transparent; }
-  .why::-webkit-scrollbar-thumb { background: #dcc8bc; border-radius: 2px; }
 
+  /* Custom scrollbar — thin and on-brand */
+  .why::-webkit-scrollbar       { width: 4px; }
+  .why::-webkit-scrollbar-track { background: #f5ede6; border-radius: 2px; }
+  .why::-webkit-scrollbar-thumb { background: #c4a090; border-radius: 2px; }
+  .why::-webkit-scrollbar-thumb:hover { background: #8a1f35; }
+
+  /* Fade hints there's more to read — disappears once scrolled */
   .why-fade {
-    position: absolute; bottom: 0; left: 0; right: 4px;
-    height: 24px; background: linear-gradient(transparent, #fff);
+    position: absolute; bottom: 0; left: 0;
+    right: 14px;  /* don't overlap the scrollbar */
+    height: 28px;
+    background: linear-gradient(transparent, #fff);
     pointer-events: none;
   }
 
+  /* ── Detail chips ── */
   .detail-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-  .detail { background: #fdf7f3; border: 1px solid #ede0d8; border-radius: 2px; padding: 10px 12px; }
-  .detail-label { font-size: 9px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: #c4a090; margin-bottom: 4px; }
+  .detail {
+    background: #fdf7f3; border: 1px solid #ede0d8;
+    border-radius: 2px; padding: 10px 12px;
+  }
+  .detail-label {
+    font-size: 9px; font-weight: 500; letter-spacing: 2px;
+    text-transform: uppercase; color: #c4a090; margin-bottom: 4px;
+  }
   .detail-text { font-size: 12px; font-weight: 300; color: #6a4a40; line-height: 1.5; }
 
   /* ── Mobile swipe stack ── */
-  .mobile-stack { width: 100%; }
+  .swipe-stack { width: 100%; }
 
   .stack-hint {
     text-align: center; font-size: 11px; font-weight: 300;
@@ -486,28 +540,36 @@ const CSS = `
   }
 
   .stack-wrap {
-    position: relative; height: 420px;
-    touch-action: pan-y; overflow: visible;
+    position: relative;
+    height: 430px;
+    overflow: visible;
+    touch-action: pan-y;
+    user-select: none;     /* prevent text selection while dragging */
   }
 
   .swipe-card {
-    position: absolute; width: 82%;
+    position: absolute; width: 82%; left: 50%;
     background: #fff; border: 1px solid #ecddd5; border-radius: 4px;
     padding: 22px 20px 18px;
-    box-shadow: 0 4px 20px rgba(100,40,30,0.10);
-    will-change: transform; user-select: none;
+    box-shadow: 0 4px 24px rgba(100,40,30,0.12);
+    will-change: transform;
   }
 
-  /* Fade on mobile swipe card description */
-  .swipe-card .why-fade {
-    background: linear-gradient(transparent, #fff);
+  /* Description inside swipe card — full text, no truncation */
+  .swipe-why {
+    font-size: 13px; font-weight: 300; color: #5a3a30;
+    line-height: 1.8; margin-bottom: 14px;
+    max-height: none;  /* show all text on the swipe card */
+    overflow: visible;
+    padding-right: 0;
   }
 
-  .dots { display: flex; justify-content: center; gap: 6px; margin-top: 16px; }
+  /* Dot indicators */
+  .dots { display: flex; justify-content: center; gap: 7px; margin-top: 18px; }
 
   .dot {
     width: 6px; height: 6px; border-radius: 50%;
-    background: #e0cfc5; transition: all 0.2s;
+    background: #e0cfc5; transition: all 0.2s; cursor: pointer;
   }
   .dot-on { background: #8a1f35; width: 18px; border-radius: 3px; }
 
@@ -516,14 +578,12 @@ const CSS = `
     background: #fff; border: 1px solid #ecddd5; border-radius: 3px;
     padding: 24px 28px; margin-bottom: 12px;
   }
-
   .skeleton {
     display: block; border-radius: 2px; margin-bottom: 9px;
     animation: shimmer 1.4s infinite;
     background: linear-gradient(90deg, #f5ede6 25%, #ecddd5 50%, #f5ede6 75%);
     background-size: 200% 100%;
   }
-
   @keyframes shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
@@ -534,7 +594,10 @@ const CSS = `
     background: #fff5f5; border: 1px solid #f0d0d0;
     border-radius: 3px; padding: 24px; text-align: center;
   }
-  .error-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: #a03030; margin-bottom: 8px; }
+  .error-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px; color: #a03030; margin-bottom: 8px;
+  }
   .error-detail { font-size: 13px; font-weight: 300; color: #8a5050; }
 
   /* ── Empty state ── */
