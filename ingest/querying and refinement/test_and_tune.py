@@ -9,7 +9,7 @@ import re
 import time
 
 from llm_filter_extraction import extract_filters, apply_filters
-from llm_result_refinement import refine_results, search_wines, display_recommendations
+from ingest.test.llm_result_refinement import refine_results, search_wines, display_recommendations
 
 df = pd.read_csv("wines_clean.csv")
 

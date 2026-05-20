@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────
+# NGINX Ingress
+#
+# Single public IP for everything.
+# Routes:
+#   /api/*  → api-service:8000
+#   /*      → frontend-service:80
+#
+# Before applying this, install the NGINX ingress controller:
+#   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#   helm install ingress-nginx ingress-nginx/ingress-nginx \
+#     --namespace ingress-nginx \
+#     --create-namespace \
+#     --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz
+#
+# After applying, get your public IP:
+#   kubectl get service -n ingress-nginx ingress-nginx-controller
+# ─────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sommelier-ingress
+  namespace: sommelier
+  annotations:
+    kubernetes.io/ingress.class: nginx
+
+    # Strip /api prefix before forwarding to the API service
+    # e.g. /api/recommend → /recommend
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+    # Allow large request bodies (for long wine queries)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # Increase timeout for LLM responses (can take 5-15s)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+
+    # Enable CORS at the ingress level
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type"
+
+    # Uncomment and fill in after you have a domain + cert-manager installed:
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  rules:
+    - http:
+        paths:
+          # API routes — strip /api prefix
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 8000
+
+          # Everything else goes to frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+  # Uncomment for HTTPS (requires cert-manager):
+  # tls:
+  #   - hosts:
+  #       - your-domain.com
+  #     secretName: sommelier-tls

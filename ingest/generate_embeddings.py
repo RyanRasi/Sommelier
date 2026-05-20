@@ -9,7 +9,7 @@ def load_cleaned_data(filename):
     return df
 
 # Load model tailored for semantic search
-def embedding_model(transformer_model):
+def embedding_model(df, transformer_model):
     model = SentenceTransformer(transformer_model)
     print("Model loaded.")
     print(f"Embedding dimension: {model.get_sentence_embedding_dimension()}")
@@ -55,17 +55,3 @@ def validation(filename):
     print(f"Other similarity: {other_sim:.4f}")
 
     print("✅ All embedding checks passed.")
-
-df = load_cleaned_data("wines_clean")
-embeddings = embedding_model("all-MiniLM-L6-v2")
-
-# Save embedding model
-filename = "wine_embeddings"
-np.save(f"{filename}.npy", embeddings)
-print(f"✅ Saved {filename}.npy")
-
-# Verify saved embedding model
-embeddings_check = np.load(f"{filename}.npy")
-print(f"Reloaded shape: {embeddings_check.shape}")
-
-validation(filename)

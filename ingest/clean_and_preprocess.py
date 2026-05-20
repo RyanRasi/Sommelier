@@ -50,20 +50,3 @@ def validate(filename):
 
     print(f"✅ All checks passed. {len(df_check)} clean wines ready.")
 
-
-df = pd.read_csv("winemag-data-130k-v2.csv", index_col=0)
-df = drop_nulls(df)
-df = fill_remaining_nulls(df)
-
-df['text'] = df.apply(build_rich_text, axis=1)
-
-# Preview
-print("\nSample text field:")
-print(df['text'].iloc[0])
-
-# Save cleaned dataset
-filename = "wines_clean"
-df.to_csv(f"{filename}.csv", index=False)
-print(f"\n✅ Saved {filename}.csv with {len(df)} rows.")
-
-validate(filename)

@@ -1,86 +1,358 @@
-# Sommelier
-A wine recommendation model using natural language processing (NLP) with a custom named entity recognition (NER) model.
+# 🍷 Sommelier — AI Wine Recommendation System
 
-Inspired by the film "Sideways (2004)" I decided to develop a model designed to recommend a wine to a user based on descriptions akin to those provided by a sommelier following a tasting experience. The user can also specify any varieties, wineries, and region preferences that they would like their recommended wine to have as well as any tastes and food pairings. Due to this using Named Entity Recognition (NER), the user can ask questions that they normally would at a restuarant to discover their chosen wine.
+A natural language wine recommendation system powered by semantic search and a local LLM. Describe what you want in plain English and get back curated, explained recommendations from a dataset of 120,000 wines.
 
-### Questions you can ask:
+---
 
-Wine from a specific country
-`Give me a wine from Italy`
+## Overview
 
-A specific grape variety
-`I'm looking for a Pinot Noir`
+Type something like *"bold red for a medium-rare steak"* or *"dry French wine under $30"* or *""Give me a wine from Italy that pairs well with seafood* and the system:
 
-Wine from a country with a food pairing
-`Give me a wine from Italy that pairs well with seafood`
+1. Uses an LLM to extract structured filters (country, price, variety, flavour profile)
+2. Applies those filters to narrow a 120k wine dataset
+3. Runs semantic search using sentence embeddings + FAISS vector search
+4. Passes the top candidates back to the LLM to select and explain the best 3
 
-A wine that has specific tastes
-`Give me a rich and fruity red wine with notes of cherry and oak`
+Everything runs locally — no OpenAI API key required.
 
-Can You Recommend a Wine for [Specific Dish or Cuisine]?
-`Can you recommend a wine to pair with a salmon dish?`
+---
 
-Wine that has a region and food pairing
-`Give me a wine from Italy that pairs with seafood`
+## Architecture
 
-Questions can also be asked regarding wines that are red or white, dry or sweet, light or full bodied, or crisp or smooth 
+```
+User Query
+    │
+    ▼
+┌─────────────────────┐
+│  LLM Filter         │  Extracts: country, max_price, variety,
+│  Extraction         │  flavour keywords, cleaned search query
+│  (Ollama / llama3.2)│
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  Hard Filter        │  Narrows 120k wines to matching subset
+│  (pandas)           │  by country, price, variety, points
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  Semantic Search    │  Embeds cleaned query → searches FAISS
+│  (FAISS + sentence- │  index → returns top 15 candidates
+│   transformers)     │
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  LLM Refinement     │  Selects best 3, writes explanations,
+│  (Ollama / llama3.2)│  food pairings, and serving tips
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  FastAPI            │  REST API served on localhost:8000
+│  REST API           │
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  React Frontend     │  Search UI with animated cards
+│  (Vite)             │  served on localhost:5173
+└─────────────────────┘
+```
 
-## How to install:
+---
 
-### Pre-requisites
+## Tech Stack
 
-1. Go to the [Kaggle Wine Reviews Dataset](https://www.kaggle.com/datasets/zynicide/wine-reviews), make an account and download the dataset
-2. Once you have downloaded the file titled 'winemag-data-130k-v2.csv', place it within the microservices/wineRecommendationAPI/data folder
+| Layer | Technology |
+|---|---|
+| Embeddings | `sentence-transformers` — `all-MiniLM-L6-v2` (384 dimensions) |
+| Vector search | `FAISS` — exact cosine similarity search |
+| LLM | `Ollama` running `llama3.2` locally |
+| API | `FastAPI` + `uvicorn` |
+| Frontend | `React` + `Vite` |
+| Dataset | Wine Reviews — 120k wines from Kaggle |
 
-#### Local Hosting
+---
 
-1. Clone the repo to a folder directory of your choosing
-2. Place the file downloaded from the pre-requisite step into the microservices/wineRecommendationAPI/data directory if you haven't already
-3. Open two terminals and cd into the repo within the folder directory
-4. In terminal A, cd into the sommelier folder `cd sommelier`
-5. In terminal B, cd into the microservices/wineRecommendationAPI folder `cd microservices/wineRecommendationAPI`
-6. In both terminals run `pip install -r requirements.txt`
-7. In terminal A, run `python manage.py collectstatic`, `python manage.py makemigrations`, `python manage.py migrate`, `python manage.py runserver`, and accept the 'yes' prompts
-8. In terminal B, run `uvicorn wine_api:app --host 0.0.0.0 --port 8001`
+## Prerequisites
 
-#### Docker Container
+Install these on the new machine before anything else:
 
-1. Clone the repo to a folder directory of your choosing
-2. Place the file downloaded from the pre-requisite step into the microservices/wineRecommendationAPI/data directory if you haven't already
-3. Open a terminal and cd into the repo within the folder directory
-4. Run `docker-compose build`
-5. Run `docker-compose up`
+| Tool | Version | Download |
+|---|---|---|
+| Python | 3.9+ | https://python.org |
+| Node.js | 18+ | https://nodejs.org (LTS) |
+| Ollama | Latest | https://ollama.com/download |
 
-## How to use
+Verify:
 
-1. Open your browser to either your localhost(if you built locally) or your docker IP followed by the port 8000. E.g. `localhost:8000`
-2. Type in a phrase to get a wine recommendation e.g. `A wine from Italy that pairs well with steak`
-3. Your results will be visible upon clicking on 'recommend', alternatively you can click on the random wine button
+```bash
+python --version   # 3.9+
+node --version     # v18+
+ollama --version
+```
 
-## How to train
+---
 
-1. I have personally trained the model already on 2000 training entries, however if you wish to train on more entries then you can either run the python file 'trainCustomModel.py' locally or you can access 'http://localhost:8001/train' within the browser upin running the webserver. Don't forget to place the Kaggle dataset file within the `microservices/wineRecommendationAPI/data` first
+## Installation
 
-## Methodology
+### 1. Clone the repository
 
-A custom Named Entity Recognition (NER) Model has been trained and customised to identify specific entities (in this case being wine regions, designations, varieties, wineries, general desriptions and food pairings). Whilst the default SpaCy model of en_core_web_lg is great, it struggles with defining multiple word locations such as Napa Valley, as well as complex wine varieties. Due to wine descriptions utilising a wide range of vocabulary, I decided it was important to refine the model further and so a custom model was created. The training takes place on 2000 entities which are individually labelled and takes around an hour to fully train. This is then tested on a dataset of around 100,000 entities.
+```bash
+git clone https://github.com/your-username/your-repo.git
+cd your-repo
+```
 
-To train a custom NER model using SpaCy, the following steps were taken:
+---
 
-a. Annotation of the wine dataset with entity labels; wine colour, dry, sweet, bodied, crisp, smooth, flavour and food pairing.
+### 2. Set up Python environment
 
-b. Training of the NER model on the annotated data to recognise these entities.
+```bash
+# Create a virtual environment
+python -m venv venv
+source venv/bin/activate        # Mac/Linux
+venv\Scripts\activate           # Windows
 
-c. Fine-tuning the model to improve its accuracy.
+# Install dependencies
+pip install -r requirements.txt
+```
 
-Model Evaluation based on 70/30 Train/Test Split
+---
 
-| Metric    | Score |
-|-----------|-------|
-| Precision |99.56% |
-| Recall    |99.56% |
-| F1        |99.56% |
+### 3. Download the dataset
 
-## Acknowledgements
+The CSV is not committed to the repo (~50MB). Run this once:
 
-A big thanks to Zack Thoutt for providing further inspiration and a test datatset.
+```bash
+python download_data.py
+```
+
+This downloads `winemag-data-130k-v2.csv` into your project root.
+
+---
+
+### 4. Generate embeddings and build the FAISS index
+
+These files are too large for GitHub and must be regenerated locally.
+
+> ⚠️ The embedding step takes **10 - 20 minutes** on first run. This is normal.
+
+```bash
+python preprocess.py            # → wines_clean.csv
+python generate_embeddings.py   # → wine_embeddings.npy  (~180MB, takes 3–8 min)
+python build_index.py           # → wine_faiss.index
+```
+
+Or if your pipeline is a single file:
+
+```bash
+python sommelier.py
+```
+
+---
+
+### 5. Pull the Ollama model
+
+```bash
+ollama pull llama3.2
+```
+
+Downloads `llama3.2` (~2GB) to your local Ollama store. Only needed once.
+
+Verify it's available:
+
+```bash
+ollama list
+# should show: llama3.2
+```
+
+---
+
+### 6. Install React dependencies
+
+```bash
+cd sommelier-ui
+npm install
+cd ..
+```
+
+---
+
+## Running the App
+
+You need two terminals running simultaneously.
+
+**Terminal 1 — Python API:**
+
+```bash
+uvicorn api:app --reload --port 8000
+```
+
+Expected output:
+```
+INFO: Uvicorn running on http://127.0.0.1:8000
+INFO: 🍷 Sommelier API starting up...
+INFO: ✅ 119895 wines loaded and ready.
+```
+
+**Terminal 2 — React frontend:**
+
+```bash
+cd sommelier-ui
+npm run dev
+```
+
+Expected output:
+```
+VITE v5.x.x  ready in 300ms
+➜  Local:   http://localhost:5173/
+```
+
+Open **http://localhost:5173** in your browser.
+
+---
+
+## Project Structure
+
+```
+.
+├── api.py                    # FastAPI REST API (HTTP layer only)
+├── recommender.py            # Full recommendation pipeline
+├── sommelier.py              # Original pipeline (standalone / CLI)
+├── download_data.py          # One-time dataset download script
+├── requirements.txt          # Python dependencies
+│
+├── sommelier-ui/             # React frontend (Vite)
+│   ├── src/
+│   │   ├── App.jsx           # Main UI component
+│   │   └── main.jsx          # React entry point
+│   ├── package.json
+│   └── vite.config.js
+│
+│   # Generated files — not committed to git:
+├── winemag-data-130k-v2.csv  # Raw dataset
+├── wines_clean.csv           # Cleaned dataset
+├── wine_embeddings.npy       # Sentence embeddings (~180MB)
+└── wine_faiss.index          # FAISS vector index
+```
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:8000`
+
+### `GET /`
+
+Returns API status and basic info.
+
+**Response:**
+```json
+{
+  "name": "AI Sommelier API",
+  "status": "running",
+  "wines_loaded": 119895,
+  "usage": "POST /recommend with {query: string}",
+  "docs": "/docs"
+}
+```
+
+---
+
+### `GET /health`
+
+Health check — use this to verify the API is ready before making requests.
+
+**Response `200`:**
+```json
+{
+  "status": "healthy",
+  "wines_loaded": 119895,
+  "model": "llama3.2",
+  "version": "1.0.0"
+}
+```
+
+**Response `503`** — if the wine database failed to load.
+
+---
+
+### `POST /recommend`
+
+Returns 3 wine recommendations for a natural language query.
+
+**Request body:**
+```json
+{
+  "query": "dry wine from France"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "query": "dry wine from France",
+  "recommendations": [
+    {
+      "rank": 1,
+      "title": "Château Pichon Baron 2012 (Pauillac)",
+      "why": "This classic Bordeaux is the definition of dry and structured...",
+      "food_pairing": "Perfect with lamb chops or duck confit.",
+      "serving_tip": "Decant for 30 minutes before serving."
+    }
+  ],
+  "count": 3,
+  "elapsed_seconds": 4.21
+}
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| `400` | Empty query or query over 500 characters |
+| `404` | No recommendations found — try rephrasing |
+| `500` | Pipeline error |
+
+**Error shape:**
+```json
+{
+  "error": "Query cannot be empty.",
+  "status_code": 400
+}
+```
+
+---
+
+### Interactive docs
+
+FastAPI generates a full Swagger UI automatically:
+
+```
+http://localhost:8000/docs
+```
+
+---
+
+## Example Queries
+
+```
+wine for medium rare steak
+fruity and light wine
+dry wine from France
+Italian red under $25
+highly rated wine over 95 points
+something sweet for dessert
+bold earthy Barolo
+recommend something interesting
+cheap everyday white wine
+wine to pair with salmon
+```
+
+---
+
+## License
+
+MIT

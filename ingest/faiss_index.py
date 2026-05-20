@@ -2,25 +2,25 @@ import faiss
 import numpy as np
 import pandas as pd
 
-def load_embeddings():
+def load_embeddings(data_dir):
     # Load embeddings and data
-    embeddings = np.load("wine_embeddings.npy")
-    df = pd.read_csv("wines_clean.csv")
+    embeddings = np.load(f"{data_dir}/wine_embeddings.npy")
+    df = pd.read_csv(f"{data_dir}/wines_clean.csv")
 
     print(f"Embeddings shape: {embeddings.shape}")
     return df, embeddings
 
 def build_index(embeddings):
-    # FAISS requires float32
-    embeddings = embeddings.astype(np.float32)
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
 
-    # Get dimension size
     dimensions = embeddings.shape[1]
     print(f"Vector dimension: {dimensions}")
+
     return embeddings, dimensions
 
 def normalise_vectors(embeddings):
-    faiss.normalize_L2(embeddings)  # modifies in place
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+    faiss.normalize_L2(embeddings)
     print("Vectors normalised.")
     return embeddings
 
@@ -69,14 +69,3 @@ def validation(df, embeddings, filename):
 
     print("✅ All FAISS checks passed.")
 
-df, embeddings = load_embeddings()
-embeddings, dimensions = build_index(embeddings)
-embeddings = normalise_vectors(embeddings)
-
-index = build_and_populate_index(embeddings, dimensions)
-
-filename = "wine_faiss"
-save_index(filename, index)
-
-test_sample(df, embeddings, filename)
-validation(df, embeddings, filename)

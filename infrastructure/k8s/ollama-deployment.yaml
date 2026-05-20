@@ -1,0 +1,124 @@
+# ─────────────────────────────────────────────────────────
+# Ollama Deployment
+#
+# Runs llama3.2 locally inside the cluster.
+# The API pod connects to it via http://ollama-service:11434
+#
+# Note: Ollama needs the model downloaded on first start.
+# The init container handles this automatically.
+#
+# For GPU acceleration (faster inference), change the node
+# pool VM size to a GPU SKU e.g. Standard_NC6s_v3 and
+# uncomment the GPU resource requests below.
+# ─────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: sommelier
+  labels:
+    app: ollama
+spec:
+  replicas: 1    # Only scale if you have multiple GPU nodes
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      # ── Init container: pull the model ───────────────────
+      # Downloads llama3.2 (~2GB) on first deploy.
+      # Uses a persistent volume so it only downloads once.
+      initContainers:
+        - name: pull-model
+          image: ollama/ollama:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Start ollama server in background
+              ollama serve &
+              OLLAMA_PID=$!
+
+              # Wait for server to be ready
+              echo "Waiting for Ollama to start..."
+              sleep 5
+
+              # Pull the model (skips if already cached)
+              echo "Pulling llama3.2..."
+              ollama pull llama3.2
+
+              echo "Model ready."
+              kill $OLLAMA_PID
+          volumeMounts:
+            - name: ollama-models
+              mountPath: /root/.ollama
+
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: ollama-models
+              mountPath: /root/.ollama
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+            # Uncomment for GPU nodes:
+            # limits:
+            #   nvidia.com/gpu: 1
+          readinessProbe:
+            httpGet:
+              path: /api/tags
+              port: 11434
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: 11434
+            initialDelaySeconds: 60
+            periodSeconds: 30
+
+      volumes:
+        - name: ollama-models
+          persistentVolumeClaim:
+            claimName: ollama-pvc
+
+---
+# Persistent volume for Ollama model cache
+# Prevents re-downloading llama3.2 (~2GB) every time the pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-pvc
+  namespace: sommelier
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi    # enough for llama3.2 + room to grow
+  storageClassName: managed-csi   # default AKS storage class
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-service
+  namespace: sommelier
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
+  type: ClusterIP

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://192.168.0.25:8000";
 
 const SUGGESTIONS = [
   "wine for medium rare steak",
@@ -10,8 +10,6 @@ const SUGGESTIONS = [
   "something sweet for dessert",
   "recommend something interesting",
 ];
-
-const RANKS = ["I", "II", "III"];
 
 // ─────────────────────────────────────────────
 // Skeleton loader
@@ -30,32 +28,38 @@ function SkeletonCard() {
 }
 
 // ─────────────────────────────────────────────
-// Desktop card — description scrolls
+// Desktop card — description fully scrollable
 // ─────────────────────────────────────────────
 function DesktopCard({ rec, index }) {
   const whyRef = useRef(null);
-  const [overflowing, setOverflowing] = useState(false);
+  const [showFade, setShowFade] = useState(false);
 
   useEffect(() => {
     const el = whyRef.current;
-    if (el) setOverflowing(el.scrollHeight > el.clientHeight + 4);
+    if (!el) return;
+    // Show fade only if content actually overflows
+    setShowFade(el.scrollHeight > el.clientHeight + 2);
   }, [rec]);
 
-  // Hide fade once user scrolls down
   const handleScroll = (e) => {
-    if (e.target.scrollTop > 4) setOverflowing(false);
+    const el = e.target;
+    // Hide fade once user has scrolled near the bottom
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    setShowFade(!nearBottom);
   };
 
   return (
     <div className="wine-card">
       <div className="card-top">
-        <span className="rank">No. {RANKS[index] ?? index + 1}</span>
+        <span className="rank">No. {index + 1}</span>
         <h2 className="card-title">{rec.title}</h2>
       </div>
       <div className="divider" />
       <div className="why-wrap">
-        <p className="why" ref={whyRef} onScroll={handleScroll}>{rec.why}</p>
-        {overflowing && <div className="why-fade" />}
+        <p className="why" ref={whyRef} onScroll={handleScroll}>
+          {rec.why}
+        </p>
+        {showFade && <div className="why-fade" />}
       </div>
       <div className="detail-row">
         <div className="detail">
@@ -72,113 +76,54 @@ function DesktopCard({ rec, index }) {
 }
 
 // ─────────────────────────────────────────────
-// Swipeable card stack — touch + mouse drag
+// Mobile snap-scroll carousel
+// Swipe, scroll, or tap dots to navigate
 // ─────────────────────────────────────────────
-function SwipeStack({ results }) {
+function MobileCarousel({ results }) {
   const [active, setActive] = useState(0);
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startX = useRef(0);
-  const mouseDown = useRef(false);
-  const containerRef = useRef(null);
+  const scrollRef = useRef(null);
 
-  // ── Touch ──
-  const onTouchStart = useCallback((e) => {
-    startX.current = e.touches[0].clientX;
-    setDragging(true);
-  }, []);
+  // Snap-scroll observer — update active dot when user scrolls
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
 
-  const onTouchMove = useCallback((e) => {
-    setDragX(e.touches[0].clientX - startX.current);
-  }, []);
-
-  const onTouchEnd = useCallback(() => {
-    commitDrag();
-  }, [dragX, active, results.length]);
-
-  // ── Mouse ──
-  const onMouseDown = useCallback((e) => {
-    mouseDown.current = true;
-    startX.current = e.clientX;
-    setDragging(true);
-    e.preventDefault(); // prevent text selection while dragging
-  }, []);
-
-  const onMouseMove = useCallback((e) => {
-    if (!mouseDown.current) return;
-    setDragX(e.clientX - startX.current);
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    if (!mouseDown.current) return;
-    mouseDown.current = false;
-    commitDrag();
-  }, [dragX, active, results.length]);
-
-  const onMouseLeave = useCallback(() => {
-    if (!mouseDown.current) return;
-    mouseDown.current = false;
-    commitDrag();
-  }, [dragX, active, results.length]);
-
-  // ── Shared snap logic ──
-  const commitDrag = useCallback(() => {
-    if (dragX < -50 && active < results.length - 1) setActive((a) => a + 1);
-    else if (dragX > 50 && active > 0) setActive((a) => a - 1);
-    setDragX(0);
-    setDragging(false);
-  }, [dragX, active, results.length]);
-
-  // Re-bind commitDrag to touch/mouse handlers that captured it in closure
-  // by using a ref so they always call the latest version
-  const commitRef = useRef(commitDrag);
-  useEffect(() => { commitRef.current = commitDrag; }, [commitDrag]);
-
-  const getCardStyle = (index) => {
-    const cw = containerRef.current?.offsetWidth || 320;
-    const offset = index - active;
-    const drag = dragX / cw;
-    const eff = offset - drag;
-    const tx = eff * 105;
-    const rot = eff * 5;
-    const scale = Math.max(0.86, 1 - Math.abs(eff) * 0.07);
-    const opacity = Math.abs(eff) > 1.6 ? 0 : 1;
-
-    return {
-      left: "50%",
-      top: 0,
-      transform: `translateX(calc(-50% + ${tx}%)) rotate(${rot}deg) scale(${scale})`,
-      zIndex: 20 - Math.round(Math.abs(offset) * 2),
-      opacity,
-      cursor: dragging ? "grabbing" : "grab",
-      transition: dragging
-        ? "none"
-        : "transform 0.32s cubic-bezier(.25,.46,.45,.94), opacity 0.32s ease",
+    const onScroll = () => {
+      const cardWidth = el.offsetWidth;
+      const index = Math.round(el.scrollLeft / cardWidth);
+      setActive(index);
     };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Jump to a card — used by dot tap
+  const goTo = (index) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: index * el.offsetWidth, behavior: "smooth" });
+    setActive(index);
   };
 
   return (
-    <div className="swipe-stack">
-      <p className="stack-hint">← drag or swipe to explore →</p>
-      <div
-        ref={containerRef}
-        className="stack-wrap"
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseLeave}
-      >
+    <div className="carousel">
+      <p className="stack-hint">← scroll or swipe between cards →</p>
+
+      <div className="carousel-track" ref={scrollRef}>
         {results.map((rec, i) => (
-          <div key={i} className="swipe-card" style={getCardStyle(i)}>
+          <div key={i} className="carousel-card">
             <div className="card-top">
-              <span className="rank">No. {RANKS[i] ?? i + 1}</span>
+              <span className="rank">No. {i + 1}</span>
               <h2 className="card-title">{rec.title}</h2>
             </div>
             <div className="divider" />
-            <p className="why swipe-why">{rec.why}</p>
+
+            {/* Full description — scrollable inside the card */}
+            <div className="mobile-why-wrap">
+              <p className="mobile-why">{rec.why}</p>
+            </div>
+
             <div className="detail-row">
               <div className="detail">
                 <div className="detail-label">Food Pairing</div>
@@ -192,12 +137,15 @@ function SwipeStack({ results }) {
           </div>
         ))}
       </div>
+
+      {/* Dot indicators — tappable */}
       <div className="dots">
         {results.map((_, i) => (
-          <div
+          <button
             key={i}
             className={`dot${i === active ? " dot-on" : ""}`}
-            onClick={() => setActive(i)}
+            onClick={() => goTo(i)}
+            aria-label={`Go to recommendation ${i + 1}`}
           />
         ))}
       </div>
@@ -209,11 +157,14 @@ function SwipeStack({ results }) {
 // Main App
 // ─────────────────────────────────────────────
 export default function App() {
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("idle");
+  const [query, setQuery]     = useState("");
+  const [status, setStatus]   = useState("idle");
   const [results, setResults] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [apiReady, setApiReady] = useState(true);
+
+  // Ref to the results section — used to scroll down on mobile after a search
+  const resultsRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API_URL}/health`)
@@ -243,43 +194,19 @@ export default function App() {
       const data = await res.json();
       setResults(data.recommendations);
       setStatus("done");
+
+      // Scroll down to results on mobile — wait for DOM to update first
+      setTimeout(() => {
+        if (resultsRef.current) {
+          resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+
     } catch (e) {
       setErrorMsg(e.message);
       setStatus("error");
     }
   };
-
-  const ResultsContent = ({ mobile }) => (
-    <>
-      {status === "loading" && (
-        <>
-          <p className="results-label">Consulting the cellar&hellip;</p>
-          {!mobile && [0, 1, 2].map((i) => <SkeletonCard key={i} />)}
-        </>
-      )}
-      {status === "error" && (
-        <div className="error-box">
-          <p className="error-title">Something went wrong</p>
-          <p className="error-detail">{errorMsg}</p>
-        </div>
-      )}
-      {status === "done" && results.length > 0 && (
-        <>
-          <p className="results-label">3 selections for &ldquo;{query}&rdquo;</p>
-          {mobile
-            ? <SwipeStack results={results} />
-            : results.map((rec, i) => <DesktopCard key={i} rec={rec} index={i} />)
-          }
-        </>
-      )}
-      {status === "idle" && (
-        <div className="empty">
-          <div className="empty-icon">🍷</div>
-          <p className="empty-text">Your recommendations will appear here</p>
-        </div>
-      )}
-    </>
-  );
 
   return (
     <>
@@ -326,14 +253,51 @@ export default function App() {
           </div>
         </div>
 
-        <div className="results desktop-results">
-          <ResultsContent mobile={false} />
-        </div>
+        {/* Results — ref used for auto-scroll on mobile */}
+        <div className="results" ref={resultsRef}>
 
-        <div className="results mobile-results">
-          <ResultsContent mobile={true} />
-        </div>
+          {status === "loading" && (
+            <>
+              <p className="results-label">Consulting the cellar&hellip;</p>
+              <div className="desktop-only">
+                {[0, 1, 2].map((i) => <SkeletonCard key={i} />)}
+              </div>
+            </>
+          )}
 
+          {status === "error" && (
+            <div className="error-box">
+              <p className="error-title">Something went wrong</p>
+              <p className="error-detail">{errorMsg}</p>
+            </div>
+          )}
+
+          {status === "done" && results.length > 0 && (
+            <>
+              <p className="results-label">
+                3 selections for &ldquo;{query}&rdquo;
+              </p>
+              {/* Desktop: stacked cards */}
+              <div className="desktop-only">
+                {results.map((rec, i) => (
+                  <DesktopCard key={i} rec={rec} index={i} />
+                ))}
+              </div>
+              {/* Mobile: snap carousel */}
+              <div className="mobile-only">
+                <MobileCarousel results={results} />
+              </div>
+            </>
+          )}
+
+          {status === "idle" && (
+            <div className="empty">
+              <div className="empty-icon">🍷</div>
+              <p className="empty-text">Your recommendations will appear here</p>
+            </div>
+          )}
+
+        </div>
       </div>
     </>
   );
@@ -355,6 +319,15 @@ const CSS = `
   }
 
   .root { padding-bottom: 80px; }
+
+  /* ── Responsive helpers ── */
+  .desktop-only { display: block; }
+  .mobile-only  { display: none;  }
+
+  @media (max-width: 600px) {
+    .desktop-only { display: none;  }
+    .mobile-only  { display: block; }
+  }
 
   /* ── Hero ── */
   .hero { text-align: center; padding: 72px 24px 52px; }
@@ -384,8 +357,8 @@ const CSS = `
   .search-wrap { max-width: 640px; margin: 0 auto; padding: 0 24px; }
 
   .api-warning {
-    text-align: center; font-size: 13px; color: #b07040;
-    margin-bottom: 12px; font-weight: 300;
+    text-align: center; font-size: 13px;
+    color: #b07040; margin-bottom: 12px; font-weight: 300;
   }
 
   .input-row {
@@ -394,7 +367,7 @@ const CSS = `
     box-shadow: 0 2px 12px rgba(100,40,30,0.06);
   }
   .input-row:focus-within { border-color: #8a1f35; }
-  .input-row.disabled { opacity: 0.5; }
+  .input-row.disabled     { opacity: 0.5; }
 
   .input-icon {
     display: flex; align-items: center; padding: 0 16px;
@@ -414,8 +387,8 @@ const CSS = `
     letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
     transition: background 0.2s; flex-shrink: 0;
   }
-  .btn:hover { background: #a82540; }
-  .btn:active { background: #6e1828; }
+  .btn:hover    { background: #a82540; }
+  .btn:active   { background: #6e1828; }
   .btn:disabled { background: #ddd0cc; color: #b8a8a4; cursor: not-allowed; }
 
   .suggestions {
@@ -431,24 +404,16 @@ const CSS = `
   }
   .chip:hover { border-color: #8a1f35; color: #8a1f35; background: #fdf5f0; }
 
-  /* ── Results layout ── */
-  .results { max-width: 700px; margin: 52px auto 0; padding: 0 24px; }
+  /* ── Results container ── */
+  .results {
+    max-width: 700px; margin: 52px auto 0; padding: 0 24px;
+    scroll-margin-top: 24px; /* breathing room when scrollIntoView fires */
+  }
 
   .results-label {
     font-family: 'Cormorant Garamond', serif; font-size: 13px;
     font-weight: 400; letter-spacing: 3px; text-transform: uppercase;
     color: #c4a090; margin-bottom: 28px; text-align: center;
-  }
-
-  /* Desktop shown by default, mobile hidden */
-  .desktop-results { display: block; }
-  .mobile-results  { display: none;  }
-
-  @media (max-width: 600px) {
-    .desktop-results { display: none;  }
-    .mobile-results  { display: block; }
-    .title { font-size: 40px; }
-    .btn   { padding: 0 16px; font-size: 11px; }
   }
 
   /* ── Desktop wine card ── */
@@ -497,79 +462,85 @@ const CSS = `
 
   .why {
     font-size: 13px; font-weight: 300; color: #5a3a30;
-    line-height: 1.8; max-height: 88px;
-    overflow-y: scroll;      /* always show scrollbar so user knows it scrolls */
-    padding-right: 10px;     /* room for scrollbar */
+    line-height: 1.85;
+    max-height: 110px;       /* ~4 lines — scroll for more */
+    overflow-y: scroll;
+    padding-right: 12px;     /* space for scrollbar */
     scroll-behavior: smooth;
   }
 
-  /* Custom scrollbar — thin and on-brand */
   .why::-webkit-scrollbar       { width: 4px; }
   .why::-webkit-scrollbar-track { background: #f5ede6; border-radius: 2px; }
   .why::-webkit-scrollbar-thumb { background: #c4a090; border-radius: 2px; }
   .why::-webkit-scrollbar-thumb:hover { background: #8a1f35; }
 
-  /* Fade hints there's more to read — disappears once scrolled */
   .why-fade {
     position: absolute; bottom: 0; left: 0;
-    right: 14px;  /* don't overlap the scrollbar */
+    right: 16px;             /* stop before the scrollbar */
     height: 28px;
     background: linear-gradient(transparent, #fff);
     pointer-events: none;
   }
 
   /* ── Detail chips ── */
-  .detail-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .detail-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .detail      { background: #fdf7f3; border: 1px solid #ede0d8; border-radius: 2px; padding: 10px 12px; }
+  .detail-label { font-size: 9px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: #c4a090; margin-bottom: 4px; }
+  .detail-text  { font-size: 12px; font-weight: 300; color: #6a4a40; line-height: 1.5; }
 
-  .detail {
-    background: #fdf7f3; border: 1px solid #ede0d8;
-    border-radius: 2px; padding: 10px 12px;
-  }
-  .detail-label {
-    font-size: 9px; font-weight: 500; letter-spacing: 2px;
-    text-transform: uppercase; color: #c4a090; margin-bottom: 4px;
-  }
-  .detail-text { font-size: 12px; font-weight: 300; color: #6a4a40; line-height: 1.5; }
-
-  /* ── Mobile swipe stack ── */
-  .swipe-stack { width: 100%; }
+  /* ── Mobile snap carousel ── */
+  .carousel { width: 100%; }
 
   .stack-hint {
     text-align: center; font-size: 11px; font-weight: 300;
     color: #c4a090; letter-spacing: 1px; margin-bottom: 14px;
   }
 
-  .stack-wrap {
-    position: relative;
-    height: 430px;
-    overflow: visible;
-    touch-action: pan-y;
-    user-select: none;     /* prevent text selection while dragging */
+  /* Horizontal scroll container — one card per snap point */
+  .carousel-track {
+    display: flex;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch; /* momentum scroll on iOS */
+    scrollbar-width: none;             /* hide scrollbar on Firefox */
+    gap: 0;
+    padding: 0 9%;                     /* peek at adjacent cards */
+    scroll-padding: 0 9%;
   }
+  .carousel-track::-webkit-scrollbar { display: none; }
 
-  .swipe-card {
-    position: absolute; width: 82%; left: 50%;
+  .carousel-card {
+    flex: 0 0 82%;                     /* 82% wide — 9% of next card visible either side */
+    scroll-snap-align: center;
     background: #fff; border: 1px solid #ecddd5; border-radius: 4px;
     padding: 22px 20px 18px;
-    box-shadow: 0 4px 24px rgba(100,40,30,0.12);
-    will-change: transform;
+    box-shadow: 0 4px 20px rgba(100,40,30,0.10);
+    margin: 0 6px;
+    animation: fadeUp 0.4s ease both;
   }
 
-  /* Description inside swipe card — full text, no truncation */
-  .swipe-why {
-    font-size: 13px; font-weight: 300; color: #5a3a30;
-    line-height: 1.8; margin-bottom: 14px;
-    max-height: none;  /* show all text on the swipe card */
-    overflow: visible;
-    padding-right: 0;
+  /* Full description inside mobile card — scrollable */
+  .mobile-why-wrap {
+    margin-bottom: 14px;
+    max-height: 120px;
+    overflow-y: scroll;
+    padding-right: 8px;
+  }
+  .mobile-why-wrap::-webkit-scrollbar       { width: 3px; }
+  .mobile-why-wrap::-webkit-scrollbar-track { background: #f5ede6; }
+  .mobile-why-wrap::-webkit-scrollbar-thumb { background: #c4a090; border-radius: 2px; }
+
+  .mobile-why {
+    font-size: 13px; font-weight: 300; color: #5a3a30; line-height: 1.8;
   }
 
   /* Dot indicators */
-  .dots { display: flex; justify-content: center; gap: 7px; margin-top: 18px; }
+  .dots { display: flex; justify-content: center; gap: 7px; margin-top: 16px; }
 
   .dot {
     width: 6px; height: 6px; border-radius: 50%;
-    background: #e0cfc5; transition: all 0.2s; cursor: pointer;
+    background: #e0cfc5; border: none; cursor: pointer;
+    transition: all 0.2s; padding: 0;
   }
   .dot-on { background: #8a1f35; width: 18px; border-radius: 3px; }
 
@@ -594,10 +565,7 @@ const CSS = `
     background: #fff5f5; border: 1px solid #f0d0d0;
     border-radius: 3px; padding: 24px; text-align: center;
   }
-  .error-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 18px; color: #a03030; margin-bottom: 8px;
-  }
+  .error-title  { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: #a03030; margin-bottom: 8px; }
   .error-detail { font-size: 13px; font-weight: 300; color: #8a5050; }
 
   /* ── Empty state ── */
@@ -606,5 +574,13 @@ const CSS = `
   .empty-text {
     font-family: 'Cormorant Garamond', serif; font-size: 18px;
     font-weight: 300; font-style: italic; color: #c4a090;
+  }
+
+  /* ── Mobile tweaks ── */
+  @media (max-width: 600px) {
+    .title  { font-size: 40px; }
+    .btn    { padding: 0 16px; font-size: 11px; }
+    .hero   { padding: 48px 24px 36px; }
+    .results { margin-top: 36px; }
   }
 `;

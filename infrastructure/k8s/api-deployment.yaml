@@ -1,0 +1,127 @@
+# ─────────────────────────────────────────────────────────
+# API Deployment
+#
+# The init container runs first and downloads the large data
+# files from Azure Blob Storage into a shared volume.
+# The main container then starts and reads them from /data.
+# ─────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: sommelier
+  labels:
+    app: api
+spec:
+  replicas: 2                # HPA will adjust this dynamically
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      # ── Init container: download data files ─────────────
+      # Runs before the API starts. Downloads the three large
+      # files from Azure Blob Storage into the shared volume.
+      initContainers:
+        - name: download-data
+          image: mcr.microsoft.com/azure-cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Downloading data files from Azure Blob Storage..."
+              az storage blob download \
+                --account-name $STORAGE_ACCOUNT \
+                --container-name sommelier-data \
+                --name wines_clean.csv \
+                --file /data/wines_clean.csv \
+                --auth-mode login
+
+              az storage blob download \
+                --account-name $STORAGE_ACCOUNT \
+                --container-name sommelier-data \
+                --name wine_embeddings.npy \
+                --file /data/wine_embeddings.npy \
+                --auth-mode login
+
+              az storage blob download \
+                --account-name $STORAGE_ACCOUNT \
+                --container-name sommelier-data \
+                --name wine_faiss.index \
+                --file /data/wine_faiss.index \
+                --auth-mode login
+
+              echo "Data files downloaded successfully."
+              ls -lh /data/
+          env:
+            - name: STORAGE_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: sommelier-secrets
+                  key: storage-account-name
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+
+      # ── Main container: FastAPI app ──────────────────────
+      containers:
+        - name: api
+          image: REPLACE_WITH_ACR_NAME.azurecr.io/sommelier-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATA_DIR
+              value: /data
+            - name: OLLAMA_HOST
+              value: http://ollama-service:11434
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          # Readiness probe — pod only receives traffic when healthy
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          # Liveness probe — restart pod if it becomes unresponsive
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+
+      volumes:
+        - name: data-volume
+          emptyDir: {}   # shared between init and main container
+
+---
+# ── API Service ───────────────────────────────────────────
+# ClusterIP — only accessible within the cluster.
+# The frontend nginx proxies /api/ calls here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: sommelier
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
